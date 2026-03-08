@@ -1,0 +1,410 @@
+// ==UserScript==
+// @name         Boutique Auto Smart Fast
+// @namespace    http://tampermonkey.net/
+// @version      10.0
+// @description  Smart + Fast Auto Flow (Stable Accept + OK Fix)
+// @match        https://s01.pockieninja.online/
+// @grant        none
+// ==/UserScript==
+
+(function () {
+  "use strict";
+
+  let isRunning = false;
+  let observer = null;
+  let maxBetLoop = null;
+  let okObserver = null;
+  let acceptObserver = null;
+  let fallbackInterval = null;
+
+  // =========================================
+  // 🔥 REAL POINTER CLICK (สำคัญมาก)
+  // =========================================
+  function dispatchRealClick(el) {
+    if (!el) return;
+
+    const rect = el.getBoundingClientRect();
+    const x = rect.left + rect.width / 2;
+    const y = rect.top + rect.height / 2;
+
+    ["pointerdown","mousedown","pointerup","mouseup","click"].forEach(type => {
+      el.dispatchEvent(new MouseEvent(type, {
+        bubbles: true,
+        cancelable: true,
+        clientX: x,
+        clientY: y,
+        view: window
+      }));
+    });
+  }
+
+  function findButtonByExactText(text) {
+    return [...document.querySelectorAll("button")]
+      .find(btn =>
+        btn.innerText.trim() === text &&
+        btn.offsetParent !== null &&
+        !btn.disabled &&
+        !btn.classList.contains("--disabled")
+      );
+  }
+
+  function clickImage(imageName) {
+    const btn = [...document.querySelectorAll("button.image_button:not(.--disabled)")]
+      .find(b => {
+        const img = b.querySelector("img");
+        return img && img.src.includes(imageName);
+      });
+
+    if (btn) {
+      dispatchRealClick(btn);
+      return true;
+    }
+    return false;
+  }
+
+  // =========================================
+  // ✅ CONDITION 1 - Claim Bonus
+  // =========================================
+  function handleClaim() {
+    const claimBtn = findButtonByExactText("Claim Bonus");
+    if (!claimBtn) return false;
+
+    dispatchRealClick(claimBtn);
+
+    setTimeout(() => {
+      const boxes = document.querySelectorAll('img[src*="box_close.png"]');
+      boxes.forEach(box => {
+        const btn = box.closest("button");
+        if (btn) dispatchRealClick(btn);
+      });
+    }, 100);
+
+    return true;
+  }
+
+  // =========================================
+  // ✅ CONDITION 2 - Double Chance
+  // =========================================
+
+function handleDouble() {
+
+  const doubleBtn = findButtonByExactText("Double Chance");
+  if (!doubleBtn) return false;
+
+  dispatchRealClick(doubleBtn);
+
+  setTimeout(() => {
+
+    // เปิดกล่อง
+    clickImage("box_close.png");
+
+    // รอ Accept
+    setTimeout(() => {
+      const acceptBtn = findButtonByExactText("Accept");
+      if (acceptBtn) dispatchRealClick(acceptBtn);
+
+      // รอ Claim โผล่
+      setTimeout(() => {
+        const claimBtn = findButtonByExactText("Claim");
+        if (claimBtn) dispatchRealClick(claimBtn);
+
+        // Accept หลัง Claim
+        setTimeout(() => {
+          const acceptAgain = findButtonByExactText("Accept");
+          if (acceptAgain) dispatchRealClick(acceptAgain);
+
+          // Ok ปิดท้าย
+          setTimeout(() => {
+            const okBtn = findButtonByExactText("Ok");
+            if (okBtn) dispatchRealClick(okBtn);
+          }, 300);
+
+        }, 300);
+
+      }, 300);
+
+    }, 300);
+
+  }, 150);
+
+  return true;
+}
+
+  // =========================================
+  // 🔥 ACCEPT OBSERVER (กันค้าง popup)
+  // =========================================
+  function startAcceptObserver() {
+
+    if (acceptObserver) return;
+
+    acceptObserver = new MutationObserver(() => {
+
+      if (!isRunning) return;
+
+      const acceptBtn = findButtonByExactText("Accept");
+
+      if (acceptBtn) {
+        dispatchRealClick(acceptBtn);
+
+        setTimeout(() => {
+          if (acceptBtn.offsetParent !== null) {
+            dispatchRealClick(acceptBtn);
+          }
+        }, 500);
+      }
+
+    });
+
+    acceptObserver.observe(document.body, {
+      childList: true,
+      subtree: true,
+      attributes: true
+    });
+  }
+
+  function stopAcceptObserver() {
+    if (acceptObserver) {
+      acceptObserver.disconnect();
+      acceptObserver = null;
+    }
+  }
+
+  // =========================================
+  // 🔥 OK OBSERVER
+  // =========================================
+  function startOkObserver() {
+
+    if (okObserver) return;
+
+    okObserver = new MutationObserver(() => {
+
+      if (!isRunning) return;
+
+      const okBtn = findButtonByExactText("Ok");
+
+      if (okBtn) {
+        dispatchRealClick(okBtn);
+
+        setTimeout(() => {
+          if (okBtn.offsetParent !== null) {
+            dispatchRealClick(okBtn);
+          }
+        }, 500);
+      }
+
+    });
+
+    okObserver.observe(document.body, {
+      childList: true,
+      subtree: true,
+      attributes: true
+    });
+  }
+
+  function stopOkObserver() {
+    if (okObserver) {
+      okObserver.disconnect();
+      okObserver = null;
+    }
+  }
+
+  // =========================================
+  // 🔥 FALLBACK LOOP (ทุก 3 วิ)
+  // =========================================
+  function startFallbackLoop() {
+
+    if (fallbackInterval) return;
+
+    fallbackInterval = setInterval(() => {
+
+      if (!isRunning) return;
+
+      const didClaim = handleClaim();
+      const didDouble = handleDouble();
+
+      if (!didClaim && !didDouble) {
+
+        const acceptBtn = findButtonByExactText("Accept");
+        const okBtn = findButtonByExactText("Ok");
+
+        if (acceptBtn) dispatchRealClick(acceptBtn);
+        if (okBtn) dispatchRealClick(okBtn);
+      }
+
+    }, 3000);
+  }
+
+  function stopFallbackLoop() {
+    if (fallbackInterval) {
+      clearInterval(fallbackInterval);
+      fallbackInterval = null;
+    }
+  }
+
+    // =====================================
+// 🔥 CLAIM RECOVERY WATCHDOG
+// =====================================
+
+let claimRecoveryInterval = null;
+
+function startClaimRecovery() {
+
+  if (claimRecoveryInterval) return;
+
+  claimRecoveryInterval = setInterval(() => {
+
+    if (!isRunning) return;
+
+    const claimBtn = findButtonByExactText("Claim");
+    const cancelBtn = findButtonByExactText("Cancel");
+    const acceptBtn = findButtonByExactText("Accept");
+    const okBtn = findButtonByExactText("Ok");
+
+    // ถ้ามี Claim ค้างอยู่
+    if (claimBtn && cancelBtn && !acceptBtn && !okBtn) {
+
+      console.log("⚠ Claim stuck → Force Cancel");
+
+      dispatchRealClick(cancelBtn);
+    }
+
+  }, 2000); // เช็คทุก 2 วิ
+
+}
+
+function stopClaimRecovery() {
+  if (claimRecoveryInterval) {
+    clearInterval(claimRecoveryInterval);
+    claimRecoveryInterval = null;
+  }
+}
+
+  // =========================================
+  // 🎯 MAX BET LOOP
+  // =========================================
+  function startMaxBetLoop() {
+    maxBetLoop = setInterval(() => {
+      if (!isRunning) return;
+
+      const maxBet = findButtonByExactText("Max bet");
+      if (maxBet) dispatchRealClick(maxBet);
+
+    }, 120);
+  }
+
+  function stopMaxBetLoop() {
+    if (maxBetLoop) {
+      clearInterval(maxBetLoop);
+      maxBetLoop = null;
+    }
+  }
+
+  // =========================================
+  // 👀 MAIN OBSERVER
+  // =========================================
+  function startObserver() {
+
+    observer = new MutationObserver(() => {
+      if (!isRunning) return;
+
+      handleClaim();
+      handleDouble();
+    });
+
+    observer.observe(document.body, {
+      childList: true,
+      subtree: true
+    });
+  }
+
+  function stopObserver() {
+    if (observer) {
+      observer.disconnect();
+      observer = null;
+    }
+  }
+
+  // =========================================
+  // 🚀 CONTROL
+  // =========================================
+  function startAuto() {
+    if (isRunning) return;
+    isRunning = true;
+
+    startMaxBetLoop();
+    startObserver();
+    startAcceptObserver();
+    startOkObserver();
+    startFallbackLoop();
+  }
+
+  function stopAuto() {
+    isRunning = false;
+
+    stopMaxBetLoop();
+    stopObserver();
+    stopAcceptObserver();
+    stopOkObserver();
+    stopFallbackLoop();
+  }
+
+  // =========================================
+  // 🎛 UI
+  // =========================================
+  function createUI() {
+
+    if (document.getElementById("konohaUI")) return;
+
+    const div = document.createElement("div");
+    div.innerHTML = `
+      <div id="konohaUI" style="
+        position: fixed;
+        top: 70px;
+        left: 10px;
+        width: 130px;
+        background: rgba(0,0,0,0.85);
+        padding: 12px;
+        border-radius: 8px;
+        z-index: 9999;
+        font-family: sans-serif;
+        min-width: 100px;">
+
+        <h4 style="color:white;text-align:center;margin:0 0 10px 0;">
+          Konoha
+        </h4>
+
+        <button id="toggleAuto" style="
+          width:100%;
+          padding:6px;
+          border:none;
+          border-radius:5px;
+          background:#2ecc71;
+          color:white;
+          cursor:pointer;">
+          Start
+        </button>
+      </div>
+    `;
+
+    document.body.appendChild(div);
+
+    const btn = document.getElementById("toggleAuto");
+
+    btn.addEventListener("click", () => {
+
+      if (!isRunning) {
+        startAuto();
+        btn.textContent = "Stop";
+        btn.style.background = "#e74c3c";
+      } else {
+        stopAuto();
+        btn.textContent = "Start";
+        btn.style.background = "#2ecc71";
+      }
+
+    });
+  }
+
+  window.addEventListener("load", createUI);
+
+})();
