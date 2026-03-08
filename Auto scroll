@@ -1,0 +1,194 @@
+// ==UserScript==
+// @name         Scroll Auto Use + Ticket Counter
+// @namespace    http://tampermonkey.net/
+// @version      3.1
+// @description  Select Scroll, auto use, show ticket count
+// @match        https://s01.pockieninja.online/
+// @grant        none
+// ==/UserScript==
+
+(function() {
+    'use strict';
+
+    let enabled = false;
+    let interval = null;
+    let ticketInterval = null;
+    let selectedScroll = "37"; // default A
+
+    // ===== หาและอ่านจำนวนตั๋ว =====
+    function getTicketCount() {
+        const items = document.querySelectorAll("div.item");
+
+        for (let item of items) {
+            const img = item.querySelector("img.img__image");
+
+            if (img && img.src.includes("treasure.png")) {
+                const textDiv = item.querySelector(".text-outline");
+                if (textDiv) {
+                    const match = textDiv.innerText.match(/\d+/);
+                    if (match) {
+                        return parseInt(match[0]);
+                    }
+                }
+            }
+        }
+        return 0;
+    }
+
+    // ===== คลิกขวาตามเลขไอคอน =====
+    function rightClickScroll(iconNumber) {
+        const items = document.querySelectorAll("div.item");
+
+        for (let item of items) {
+            const img = item.querySelector("img.img__image");
+
+            if (
+                img &&
+                img.src.includes("/" + iconNumber + ".png") &&
+                item.offsetParent !== null
+            ) {
+                const event = new MouseEvent("contextmenu", {
+                    bubbles: true,
+                    cancelable: true,
+                    view: window,
+                    button: 2
+                });
+
+                item.dispatchEvent(event);
+                return true;
+            }
+        }
+        return false;
+    }
+
+    // ===== กด Use =====
+    function clickUse() {
+        const allElements = document.querySelectorAll("*");
+
+        for (let el of allElements) {
+            if (
+                el.innerText &&
+                el.innerText.trim() === "Use" &&
+                el.offsetParent !== null
+            ) {
+                el.click();
+                return true;
+            }
+        }
+        return false;
+    }
+
+    function start() {
+        interval = setInterval(() => {
+
+            const tickets = getTicketCount();
+            ticketLabel.innerText = "Seal Breaker: " + tickets;
+
+            if (tickets <= 0) {
+                stop();
+                toggleBtn.innerText = "Scroll: OFF (No Seal)";
+                toggleBtn.style.background = "#555";
+                return;
+            }
+
+            if (rightClickScroll(selectedScroll)) {
+                const waitForUse = setInterval(() => {
+                    if (clickUse()) {
+                        clearInterval(waitForUse);
+                    }
+                }, 100);
+            }
+
+        }, 800);
+
+        ticketInterval = setInterval(() => {
+            ticketLabel.innerText = "Seal Breaker: " + getTicketCount();
+        }, 1000);
+    }
+
+    function stop() {
+        clearInterval(interval);
+        clearInterval(ticketInterval);
+    }
+
+    // ================= UI =================
+
+    const container = document.createElement("div");
+    container.style.position = "fixed";
+    container.style.top = "320px";
+    container.style.left = "10px";
+    container.style.zIndex = "999999";
+    container.style.width = "130px";
+    container.style.background = "rgba(0,0,0,0.7)";
+    container.style.padding = "10px";
+    container.style.borderRadius = "10px";
+    container.style.boxShadow = "0 0 10px rgba(0,0,0,0.5)";
+    container.style.display = "flex";
+    container.style.flexDirection = "column";
+    container.style.gap = "8px";
+    container.style.color = "white";
+    container.style.fontSize = "13px";
+
+    // ===== Ticket Label =====
+    const ticketLabel = document.createElement("div");
+    ticketLabel.innerText = "Seal Breaker: 0";
+
+    // ===== Dropdown =====
+    const dropdown = document.createElement("select");
+    dropdown.style.width = "100%";
+    dropdown.style.padding = "6px";
+    dropdown.style.borderRadius = "6px";
+    dropdown.style.border = "none";
+
+    const optionA = document.createElement("option");
+    optionA.value = "37";
+    optionA.text = "A-Scroll";
+
+    const optionS = document.createElement("option");
+    optionS.value = "38";
+    optionS.text = "S-Scroll";
+
+    const option294 = document.createElement("option");
+    option294.value = "294";
+    option294.text = "Gem Jar";
+
+    dropdown.appendChild(optionA);
+    dropdown.appendChild(optionS);
+    dropdown.appendChild(option294);
+
+    dropdown.onchange = function() {
+        selectedScroll = this.value;
+    };
+
+    // ===== Toggle =====
+    const toggleBtn = document.createElement("button");
+    toggleBtn.innerText = "Scroll: OFF";
+    toggleBtn.style.width = "100%";
+    toggleBtn.style.padding = "10px";
+    toggleBtn.style.borderRadius = "8px";
+    toggleBtn.style.border = "none";
+    toggleBtn.style.cursor = "pointer";
+    toggleBtn.style.background = "#e74c3c";
+    toggleBtn.style.color = "white";
+
+    toggleBtn.onclick = function() {
+        enabled = !enabled;
+
+        if (enabled) {
+            toggleBtn.innerText = "Scroll: ON";
+            toggleBtn.style.background = "#2ecc71";
+            start();
+        } else {
+            toggleBtn.innerText = "Scroll: OFF";
+            toggleBtn.style.background = "#e74c3c";
+            stop();
+        }
+    };
+
+    container.appendChild(ticketLabel);
+    container.appendChild(dropdown);
+    container.appendChild(toggleBtn);
+
+    document.body.appendChild(container);
+
+})();
