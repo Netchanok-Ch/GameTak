@@ -1,0 +1,110 @@
+// ==UserScript==
+// @name         Las Noche
+// @namespace    http://tampermonkey.net/
+// @version      1.1
+// @description  Auto Continue + Close + Show Floor
+// @match        https://s01.pockieninja.online/
+// @grant        none
+// ==/UserScript==
+
+(function() {
+    'use strict';
+
+    let autoRunning = false;
+    let loopInterval = null;
+    let currentFloor = 0;
+
+    function clickButtonByText(text) {
+        const buttons = document.querySelectorAll("button.text-shadow.theme__button--original");
+
+        for (let btn of buttons) {
+            if (
+                btn.innerText.trim() === text &&
+                !btn.disabled &&
+                btn.offsetParent !== null
+            ) {
+                btn.click();
+                return true;
+            }
+        }
+        return false;
+    }
+
+    function getCurrentFloor() {
+        const pres = document.querySelectorAll("pre");
+
+        for (let p of pres) {
+            if (p.innerText.includes("Current Floor")) {
+                const match = p.innerText.match(/Current Floor\s*(\d+)/);
+                if (match) {
+                    currentFloor = parseInt(match[1]);
+                    return currentFloor;
+                }
+            }
+        }
+        return null;
+    }
+
+    function updateButtonText() {
+        toggleBtn.innerText =
+            (autoRunning ? "Las Noche: ON | " : "Las Noche: OFF | ") + currentFloor;
+    }
+
+    function autoLoop() {
+
+        // อ่าน floor ก่อน
+        getCurrentFloor();
+        updateButtonText();
+
+        // กด Close ก่อนเสมอ
+        if (clickButtonByText("Close")) return;
+
+        // กด Continue
+        clickButtonByText("Continue");
+    }
+
+    function startAuto() {
+        if (autoRunning) return;
+        autoRunning = true;
+        loopInterval = setInterval(autoLoop, 1200);
+        toggleBtn.style.background = "#2ecc71";
+    }
+
+    function stopAuto() {
+        autoRunning = false;
+        clearInterval(loopInterval);
+        toggleBtn.style.background = "#e74c3c";
+        updateButtonText();
+    }
+
+    // ===== สร้างปุ่ม =====
+    const toggleBtn = document.createElement("button");
+    toggleBtn.style.position = "fixed";
+    toggleBtn.style.top = "598px";
+    toggleBtn.style.left = "20px";
+    toggleBtn.style.zIndex = "999999";
+    toggleBtn.style.width = "130px";
+    toggleBtn.style.padding = "10px 15px";
+    toggleBtn.style.fontSize = "14px";
+    toggleBtn.style.borderRadius = "8px";
+    toggleBtn.style.border = "none";
+    toggleBtn.style.cursor = "pointer";
+    toggleBtn.style.background = "#e74c3c";
+    toggleBtn.style.color = "white";
+    toggleBtn.style.boxShadow = "0 0 10px rgba(0,0,0,0.5)";
+
+    toggleBtn.onclick = function() {
+        if (autoRunning) {
+            stopAuto();
+        } else {
+            startAuto();
+        }
+    };
+
+    document.body.appendChild(toggleBtn);
+
+    // อ่าน floor ครั้งแรกตอนโหลด
+    getCurrentFloor();
+    updateButtonText();
+
+})();
