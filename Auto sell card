@@ -1,0 +1,157 @@
+// ==UserScript==
+// @name         Auto Sell Cards + Accept
+// @namespace    http://tampermonkey.net/
+// @version      2.0
+// @description  Auto right click card -> Sell -> Accept
+// @match        https://s01.pockieninja.online/
+// @grant        none
+// ==/UserScript==
+
+(function() {
+    'use strict';
+
+    let running = false;
+    let interval = null;
+
+    // ====== ช่วงเลขที่ต้องขาย ======
+    function generateSellList() {
+        const ranges = [
+            [2,5],
+            [7,11],
+            [13,20],
+            [22,29],
+            [40,47]
+        ];
+
+        let list = [];
+
+        ranges.forEach(range => {
+            for (let i = range[0]; i <= range[1]; i++) {
+                list.push(i);
+            }
+        });
+
+        return list;
+    }
+
+    const sellList = generateSellList();
+
+    function getCardNumber(img) {
+        const match = img.src.match(/cards\/(\d+)\.png/);
+        return match ? parseInt(match[1]) : null;
+    }
+
+    function rightClick(element) {
+        const event = new MouseEvent("contextmenu", {
+            bubbles: true,
+            cancelable: true,
+            view: window,
+            button: 2
+        });
+        element.dispatchEvent(event);
+    }
+
+    function leftClick(element) {
+        element.dispatchEvent(new MouseEvent("mousedown", { bubbles: true }));
+        element.dispatchEvent(new MouseEvent("mouseup", { bubbles: true }));
+        element.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    }
+
+    function clickSell() {
+        const items = document.querySelectorAll("div.context-menu__item");
+
+        for (let item of items) {
+            if (item.innerText.includes("Sell")) {
+                leftClick(item);
+                return true;
+            }
+        }
+        return false;
+    }
+
+    function clickAccept() {
+        const buttons = document.querySelectorAll("button.text-shadow.theme__button--original");
+
+        for (let btn of buttons) {
+            if (btn.innerText.trim() === "Accept" && !btn.disabled) {
+                leftClick(btn);
+                return true;
+            }
+        }
+        return false;
+    }
+
+    function sellOneCard() {
+        const images = document.querySelectorAll("img[src*='/cards/']");
+
+        for (let img of images) {
+            const number = getCardNumber(img);
+
+            if (number && sellList.includes(number)) {
+
+                rightClick(img);
+
+                setTimeout(() => {
+                    if (clickSell()) {
+
+                        setTimeout(() => {
+                            clickAccept();
+                        }, 200);
+
+                    }
+                }, 150);
+
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    function start() {
+        interval = setInterval(() => {
+            sellOneCard();
+        }, 800);
+    }
+
+    function stop() {
+        clearInterval(interval);
+    }
+
+   // ===== UI =====
+const btn = document.createElement("button");
+btn.innerText = "Auto Sell: OFF";
+
+btn.style.position = "fixed";
+btn.style.top = "150px";
+btn.style.left = "20px";
+btn.style.zIndex = "999999";
+
+btn.style.width = "130px";
+btn.style.height = "40px";
+btn.style.padding = "10px";
+btn.style.boxSizing = "border-box";  // กัน padding ทำให้ขนาดเพี้ยน
+btn.style.borderRadius = "8px";
+btn.style.border = "none";
+btn.style.cursor = "pointer";
+btn.style.background = "#e74c3c";
+btn.style.color = "white";
+btn.style.fontSize = "14px";
+btn.style.fontWeight = "bold";
+
+btn.onclick = function() {
+    running = !running;
+
+    if (running) {
+        btn.innerText = "Auto Sell: ON";
+        btn.style.background = "#2ecc71";
+        start();
+    } else {
+        btn.innerText = "Auto Sell: OFF";
+        btn.style.background = "#e74c3c";
+        stop();
+    }
+};
+
+document.body.appendChild(btn);
+})();
