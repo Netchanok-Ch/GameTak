@@ -1,0 +1,200 @@
+// ==UserScript==
+// @name         Slot Machine Ultimate
+// @namespace    http://tampermonkey.net/
+// @version      3.0
+// @description  SM Auto with cooldown + stamina monitor
+// @match        https://s01.pockieninja.online/
+// @grant        none
+// ==/UserScript==
+
+(function () {
+    'use strict';
+
+    let enabled = false;
+    let interval = null;
+    let nextAllowedTime = 0;
+
+    function sleep(ms) {
+        return new Promise(resolve => setTimeout(resolve, ms));
+    }
+
+    // ==============================
+    // COOLDOWN SYSTEM
+    // ==============================
+    function getAttackCooldown() {
+        const elements = Array.from(document.querySelectorAll("div"));
+
+        for (let el of elements) {
+            if (el.innerText.includes("You're attacking too quickly")) {
+                const match = el.innerText.match(/(\d+)/);
+                if (match) return parseInt(match[1], 10);
+            }
+        }
+        return 0;
+    }
+
+    // ==============================
+    // STAMINA SYSTEM
+    // ==============================
+function getStamina() {
+    const bars = document.querySelectorAll(
+        'img.j-image[src*="RoleIcon/bar.png"][title*="/"]'
+    );
+
+    for (let bar of bars) {
+        if (bar.style.top === "42px") { // ตำแหน่ง VP
+            const [current, max] = bar.title.split("/").map(Number);
+            return { current, max };
+        }
+    }
+
+    return null;
+}
+
+    // ==============================
+    // BUTTON ACTIONS
+    // ==============================
+    function isSMOpen() {
+        return document.querySelector(".slot-machine__challenge-btn") !== null;
+    }
+
+    function openSM() {
+        const btn = document.querySelector(
+            'button.image_button img[src*="SlotMachine/icon.png"]'
+        );
+        if (btn && btn.offsetParent !== null) {
+            btn.closest("button").click();
+            return true;
+        }
+        return false;
+    }
+
+    function clickChallenge() {
+        const btn = document.querySelector(".slot-machine__challenge-btn");
+        if (btn && btn.offsetParent !== null && !btn.disabled) {
+            btn.click();
+            return true;
+        }
+        return false;
+    }
+
+    function clickCloseResult() {
+        const buttons = document.querySelectorAll("button.text-shadow.theme__button--original");
+        for (let btn of buttons) {
+            if (btn.innerText.trim() === "Close" && btn.offsetParent !== null) {
+                btn.click();
+                return true;
+            }
+        }
+        return false;
+    }
+
+    // ==============================
+    // MAIN LOOP
+    // ==============================
+    async function mainLoop() {
+
+        if (!enabled) return;
+
+        // 🔴 ปิด result ก่อน
+        if (clickCloseResult()) return;
+
+        // 🔋 เช็ค stamina
+        const stamina = getStamina();
+        if (stamina) {
+            staminaBox.innerText = `Stamina: ${stamina.current}/${stamina.max}`;
+
+            if (stamina.current <= 0) {
+                console.log("No stamina left.");
+                return;
+            }
+        }
+
+        // ⛔ Cooldown
+        const now = Date.now();
+        if (now < nextAllowedTime) return;
+
+        const cooldown = getAttackCooldown();
+        if (cooldown > 0) {
+            nextAllowedTime = Date.now() + (cooldown + 1) * 1000;
+            return;
+        }
+
+        // เปิด SM ถ้ายังไม่เปิด
+        if (!isSMOpen()) {
+            openSM();
+            return;
+        }
+
+        // กด Challenge
+        clickChallenge();
+    }
+
+    function start() {
+        interval = setInterval(mainLoop, 800);
+    }
+
+    function stop() {
+        clearInterval(interval);
+    }
+
+    // ==============================
+    // UI
+    // ==============================
+
+    const toggleBtn = document.createElement("button");
+    toggleBtn.innerText = "SM: OFF";
+
+    Object.assign(toggleBtn.style, {
+        position: "fixed",
+        top: "440px",
+        left: "20px",
+        zIndex: "999999",
+        width: "130px",
+        padding: "10px 15px",
+        fontSize: "14px",
+        borderRadius: "8px",
+        border: "none",
+        cursor: "pointer",
+        background: "#e74c3c",
+        color: "white",
+        boxShadow: "0 0 10px rgba(0,0,0,0.5)"
+    });
+
+    toggleBtn.onclick = function () {
+        enabled = !enabled;
+
+        if (enabled) {
+            toggleBtn.innerText = "SM: ON";
+            toggleBtn.style.background = "#2ecc71";
+            start();
+        } else {
+            toggleBtn.innerText = "SM: OFF";
+            toggleBtn.style.background = "#e74c3c";
+            stop();
+        }
+    };
+
+    document.body.appendChild(toggleBtn);
+
+    // ===== กล่องแสดง stamina =====
+    const staminaBox = document.createElement("div");
+
+    Object.assign(staminaBox.style, {
+        position: "fixed",
+        top: "480px",
+        left: "20px",
+        zIndex: "999999",
+        width: "110px",
+        padding: "8px",
+        fontSize: "14px",
+        borderRadius: "8px",
+        background: "rgba(0,0,0,0.7)",
+        color: "#00ff88",
+        textAlign: "center"
+    });
+
+    staminaBox.innerText = "Stamina: --/--";
+    document.body.appendChild(staminaBox);
+
+})();
