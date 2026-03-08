@@ -1,0 +1,81 @@
+// ==UserScript==
+// @name         ออโต้ TB
+// @namespace    http://tampermonkey.net/
+// @version      2.0
+// @description  Auto Fight and Close with ON/OFF button
+// @match        https://s01.pockieninja.online/
+// @grant        none
+// ==/UserScript==
+
+(function() {
+    'use strict';
+
+    let autoRunning = false;
+    let loopInterval = null;
+
+    function clickButtonByText(text) {
+        const buttons = document.querySelectorAll("button.text-shadow.theme__button--original");
+
+        for (let btn of buttons) {
+            if (
+                btn.innerText.trim() === text &&
+                !btn.disabled &&
+                btn.offsetParent !== null
+            ) {
+                btn.click();
+                return true;
+            }
+        }
+        return false;
+    }
+
+    function autoLoop() {
+        if (clickButtonByText("Close")) return;
+        clickButtonByText("Fight");
+    }
+
+    function startAuto() {
+        if (autoRunning) return;
+        autoRunning = true;
+        loopInterval = setInterval(autoLoop, 1200);
+        toggleBtn.innerText = "TB Hard+Close: ON";
+        toggleBtn.style.background = "#2ecc71";
+    }
+
+    function stopAuto() {
+        autoRunning = false;
+        clearInterval(loopInterval);
+        toggleBtn.innerText = "TB Hard+Close: OFF";
+        toggleBtn.style.background = "#e74c3c";
+    }
+
+    // ===== สร้างปุ่ม =====
+    const toggleBtn = document.createElement("button");
+    toggleBtn.innerText = "TB Hard+Close: OFF";
+
+    toggleBtn.style.position = "fixed";
+    toggleBtn.style.top = "598px";
+    toggleBtn.style.left = "20px";
+    toggleBtn.style.zIndex = "999999";
+    toggleBtn.style.width = "130PX";
+    toggleBtn.style.boxSizing = "border-box";
+    toggleBtn.style.padding = "10px 15px";
+    toggleBtn.style.fontSize = "14px";
+    toggleBtn.style.borderRadius = "8px";
+    toggleBtn.style.border = "none";
+    toggleBtn.style.cursor = "pointer";
+    toggleBtn.style.background = "#e74c3c";
+    toggleBtn.style.color = "white";
+    toggleBtn.style.boxShadow = "0 0 10px rgba(0,0,0,0.5)";
+
+    toggleBtn.onclick = function() {
+        if (autoRunning) {
+            stopAuto();
+        } else {
+            startAuto();
+        }
+    };
+
+    document.body.appendChild(toggleBtn);
+
+})();
