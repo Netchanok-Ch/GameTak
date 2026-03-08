@@ -1,0 +1,291 @@
+// ==UserScript==
+// @name         VH SD SM Done
+// @namespace    http://tampermonkey.net/
+// @version      5.1
+// @description  SoulBlade Demon, Slot Machine, Las Noches, Valhalla Lv. 56
+// @author       Salty
+// @match        https://s01.pockieninja.online/*
+// @grant        none
+// ==/UserScript==
+
+(function () {
+"use strict";
+
+/* =========================================================
+   GLOBAL
+========================================================= */
+
+let autoBattleSlot = false;
+let autoBattleLN = false;
+let autoBattleRunning = false;
+let autoBattleSD = false;
+
+/* =========================================================
+   COMMON - CEK BATTLE SELESAI
+========================================================= */
+
+function cekBattleSelesai(callback, delay = 100) {
+    let interval = setInterval(() => {
+        let buttons = document.querySelectorAll(".theme__button--original");
+        for (let btn of buttons) {
+            if (btn.textContent.trim() === "Close") {
+                btn.click();
+                clearInterval(interval);
+                setTimeout(callback, delay);
+                return;
+            }
+        }
+    }, 500);
+}
+
+/* =========================================================
+   SLOT MACHINE (SMART COOLDOWN)
+========================================================= */
+
+let slotCooldownInterval = null;
+let slotCooldownRemaining = 0;
+let slotSudahDibuka = false;
+
+function updateSlotCooldownUI() {
+    const el = document.getElementById("slotCooldownDisplay");
+    if (!el) return;
+    el.textContent = slotCooldownRemaining > 0
+        ? `SM: ${slotCooldownRemaining}s`
+        : "";
+}
+
+function startSlotCooldown(seconds) {
+    slotCooldownRemaining = seconds;
+    updateSlotCooldownUI();
+
+    if (slotCooldownInterval) clearInterval(slotCooldownInterval);
+
+    slotCooldownInterval = setInterval(() => {
+        slotCooldownRemaining--;
+        updateSlotCooldownUI();
+
+        if (slotCooldownRemaining <= 0) {
+            clearInterval(slotCooldownInterval);
+            slotCooldownInterval = null;
+            if (autoBattleSlot) setTimeout(klikChallengeSlot, 500);
+        }
+    }, 1000);
+}
+
+function klikChallengeSlot() {
+    if (!autoBattleSlot) return;
+
+    if (slotCooldownRemaining > 0) {
+        setTimeout(klikChallengeSlot, 1000);
+        return;
+    }
+
+    let btn = document.querySelector(".slot-machine__challenge-btn");
+
+    if (btn) {
+        btn.click();
+        setTimeout(() => {
+            let closeBtn = [...document.querySelectorAll("button")]
+                .find(b => b.textContent.trim() === "Close");
+
+            if (closeBtn) {
+                cekBattleSelesai(() => {
+                    setTimeout(klikChallengeSlot, 800);
+                });
+                return;
+            }
+
+            const match = document.body.innerText.match(/Please wait (\d+) seconds/i);
+            if (match) {
+                startSlotCooldown(parseInt(match[1]) + 1);
+            }
+        }, 300);
+        return;
+    }
+
+    if (!slotSudahDibuka) {
+        let icon = document.querySelector(".slot-machine__icon img");
+        if (icon) {
+            icon.click();
+            slotSudahDibuka = true;
+        }
+    }
+
+    setTimeout(klikChallengeSlot, 700);
+}
+
+function startAutoBattleSlot() {
+    if (autoBattleSlot) return;
+    autoBattleSlot = true;
+    klikChallengeSlot();
+}
+
+function stopAutoBattleSlot() {
+    autoBattleSlot = false;
+    if (slotCooldownInterval) clearInterval(slotCooldownInterval);
+    slotCooldownRemaining = 0;
+    updateSlotCooldownUI();
+}
+
+/* =========================================================
+   LAS NOCHES
+========================================================= */
+
+let targetFloorLN = 170;
+
+function klikContinueLN() {
+    if (!autoBattleLN) return;
+
+    let button = [...document.querySelectorAll("button")]
+        .find(btn => btn.textContent.trim() === "Continue");
+
+    if (button) {
+        button.click();
+        cekBattleSelesai(klikContinueLN);
+    }
+}
+
+function startAutoBattleLN() {
+    const input = prompt("Masukkan target floor:", "170");
+    const parsed = parseInt(input);
+    if (!parsed || parsed <= 0) return alert("Input tidak valid.");
+
+    targetFloorLN = parsed;
+    autoBattleLN = true;
+    klikContinueLN();
+}
+
+function stopAutoBattleLN() {
+    autoBattleLN = false;
+}
+
+/* =========================================================
+   VALHALLA LOOP
+========================================================= */
+
+function startAutoBattleValhallaLoop() {
+    autoBattleRunning = true;
+    console.log("Valhalla Start");
+}
+
+function stopAutoBattleValhallaLoop() {
+    autoBattleRunning = false;
+}
+
+/* =========================================================
+   SOULBLADE DEMON (10001-10099)
+========================================================= */
+
+let farmingLoop = null;
+
+function findAndClickBoss() {
+    for (let id = 10001; id <= 10099; id++) {
+        const canvas = document.querySelector(`#npc-container-${id} canvas`);
+        if (canvas) {
+            canvas.click();
+            return true;
+        }
+    }
+    return false;
+}
+
+function runLoop() {
+    if (!autoBattleSD) return;
+
+    if (!findAndClickBoss()) {
+        farmingLoop = setTimeout(runLoop, 1000);
+        return;
+    }
+
+    setTimeout(() => {
+        cekBattleSelesai(() => {
+            if (autoBattleSD)
+                farmingLoop = setTimeout(runLoop, 1000);
+        });
+    }, 500);
+}
+
+function startAutoBattleDemon() {
+    autoBattleSD = true;
+    runLoop();
+}
+
+function stopAutoBattleDemon() {
+    autoBattleSD = false;
+    if (farmingLoop) clearTimeout(farmingLoop);
+}
+
+/* =========================================================
+   UI
+========================================================= */
+
+    function createUIButton() {
+    let uiDiv = document.createElement("div");
+    uiDiv.innerHTML = `
+        <div id="autoBattleUI" style="position: fixed; top: 150px; right: 2px; background: rgba(0, 0, 0, 0.8); padding: 12px; z-index: 9999; border-radius: 8px; font-family: sans-serif; min-width: 100px;">
+            <h4 style="color: #ffffff; text-align: center; margin-top: 0; margin-bottom: 10px;">VH SD DM LN</h4>
+
+            <div style="margin-bottom: 10px;">
+                <button id="toggleEX" class="auto-btn">Start EX</button>
+            </div>
+
+            <div style="margin-bottom: 10px;">
+                <button id="toggleSD" class="auto-btn">Start SD</button>
+            </div>
+
+            <div style="margin-bottom: 10px;">
+                <button id="toggleSlot" class="auto-btn" style="flex:1;">Start SM</button>
+            </div>
+
+            <div style="margin-bottom: 10px;">
+                <button id="toggleLN" class="auto-btn">Start LN</button>
+            </div>
+
+            <div>
+                <button id="toggleVH" class="auto-btn">Start VH</button>
+            </div>
+
+        </div>
+        <style>
+            .auto-btn {
+                width: 100%;
+                padding: 6px 10px;
+                border: none;
+                border-radius: 5px;
+                background-color: #007bff;
+                color: white;
+                font-size: 13px;
+                cursor: pointer;
+                transition: 0.2s ease-in-out;
+            }
+            .auto-btn:hover {
+                background-color: #339cff;
+            }
+            .auto-btn.active {
+                background-color: #dc3545;
+            }
+        </style>
+    `;
+    document.body.appendChild(uiDiv);
+
+    function setupToggle(buttonId, startFn, stopFn, label) {
+        let isRunning = false;
+        const button = document.getElementById(buttonId);
+        button.addEventListener("click", () => {
+            isRunning = !isRunning;
+            button.textContent = isRunning ? `Stop ${label}` : `Start ${label}`;
+            button.classList.toggle("active", isRunning)
+            isRunning ? startFn() : stopFn();
+        });
+    }
+
+    setupToggle("toggleEX", startAutoBattleEX, stopAutoBattleEX, "EX");
+    setupToggle("toggleSD", startAutoBattleDemon, stopAutoBattleDemon, "SD");
+    setupToggle("toggleSlot", startAutoBattleSlot, stopAutoBattleSlot, "SM");
+    setupToggle("toggleLN", startAutoBattleLN, stopAutoBattleLN, "LN");
+    setupToggle("toggleVH", startAutoBattleValhallaLoop, stopAutoBattleValhallaLoop, "VH");
+}
+
+window.addEventListener("load", createUIButton);
+
+})();
