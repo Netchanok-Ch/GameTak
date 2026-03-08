@@ -1,0 +1,142 @@
+// ==UserScript==
+// @name         Imple Down + Close (Smart Cooldown)
+// @namespace    http://tampermonkey.net/
+// @version      2.0
+// @description  Auto click Imple Down and close popup with cooldown check
+// @match        https://s01.pockieninja.online/
+// @grant        none
+// ==/UserScript==
+
+(function() {
+    'use strict';
+
+    let enabled = false;
+    let interval = null;
+    let nextAllowedTime = 0;
+
+    // ===== Sleep =====
+    function sleep(ms) {
+        return new Promise(resolve => setTimeout(resolve, ms));
+    }
+
+    // ===== อ่าน Cooldown จากข้อความแดง =====
+    function getAttackCooldown() {
+        const elements = Array.from(document.querySelectorAll("div"));
+
+        for (let el of elements) {
+            if (el.innerText.includes("You're attacking too quickly")) {
+                const match = el.innerText.match(/(\d+)/);
+                if (match) {
+                    return parseInt(match[1], 10);
+                }
+            }
+        }
+        return 0;
+    }
+
+    // ===== กดปุ่มตามข้อความ =====
+    function clickButtonByText(text) {
+        const buttons = document.querySelectorAll("button.text-shadow.theme__button--original");
+
+        for (let btn of buttons) {
+            if (
+                btn.innerText.trim() === text &&
+                !btn.disabled &&
+                btn.offsetParent !== null
+            ) {
+                btn.click();
+                return true;
+            }
+        }
+        return false;
+    }
+
+    // ===== กดรูป prisonfloor =====
+    function clickPrisonImage() {
+        const images = document.querySelectorAll("img.j-image.clickable");
+
+        for (let img of images) {
+            if (img.src.includes("prisonfloor.png") && img.offsetParent !== null) {
+                img.click();
+                return true;
+            }
+        }
+        return false;
+    }
+
+    async function mainLoop() {
+
+        if (!enabled) return;
+
+        const now = Date.now();
+
+        // ⛔ ถ้ายังไม่ถึงเวลาที่อนุญาต
+        if (now < nextAllowedTime) {
+            return;
+        }
+
+        // 🔎 เช็คว่ามี cooldown อยู่ไหม
+        const cooldown = getAttackCooldown();
+
+        if (cooldown > 0) {
+            console.log("Detected cooldown:", cooldown, "seconds");
+            nextAllowedTime = Date.now() + (cooldown + 1) * 1000;
+            return;
+        }
+
+        // 1️⃣ กดรูป
+        const clicked = clickPrisonImage();
+
+        // 2️⃣ ถ้ากดได้ ค่อยกด Close
+        if (clicked) {
+            await sleep(200);
+            clickButtonByText("Close");
+        }
+    }
+
+    function start() {
+        interval = setInterval(mainLoop, 500);
+    }
+
+    function stop() {
+        clearInterval(interval);
+    }
+
+    // ===== ปุ่มเปิดปิด =====
+    const toggleBtn = document.createElement("button");
+    toggleBtn.innerText = "Impel Down: OFF";
+
+    Object.assign(toggleBtn.style, {
+        position: "fixed",
+        top: "530px",
+        left: "20px",
+        zIndex: "999999",
+        width: "130px",
+        padding: "10px 15px",
+        fontSize: "14px",
+        borderRadius: "8px",
+        border: "none",
+        cursor: "pointer",
+        background: "#e74c3c",
+        color: "white",
+        textAlign: "center",
+        boxShadow: "0 0 10px rgba(0,0,0,0.5)"
+    });
+
+    toggleBtn.onclick = function() {
+        enabled = !enabled;
+
+        if (enabled) {
+            toggleBtn.innerText = "Impel Down: ON";
+            toggleBtn.style.background = "#2ecc71";
+            start();
+        } else {
+            toggleBtn.innerText = "Impel Down: OFF";
+            toggleBtn.style.background = "#e74c3c";
+            stop();
+        }
+    };
+
+    document.body.appendChild(toggleBtn);
+
+})();
